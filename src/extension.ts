@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { parseTasks, supportedLanguages } from './taskParser';
+import { sourcePattern, TaskNode, TaskTree } from './taskTree';
 
 export function activate(context: vscode.ExtensionContext) {
 	const output = vscode.window.createOutputChannel('CodeTask Tracker');
@@ -32,7 +33,31 @@ export function activate(context: vscode.ExtensionContext) {
 		return tasks;
 	});
 
-	context.subscriptions.push(output, hello, scan);
+	const tree = new TaskTree(output);
+	const view = vscode.window.createTreeView('codeTaskTracker.tasks', { treeDataProvider: tree });
+	tree.attachView(view);
+	const refresh = vscode.commands.registerCommand('code-task-tracker.refresh', () => tree.refresh());
+	const open = vscode.commands.registerCommand('code-task-tracker.openTask', (node: TaskNode) => tree.openTask(node));
+	const watcher = vscode.workspace.createFileSystemWatcher(sourcePattern);
+	context.subscriptions.push(
+		output, hello, scan, tree, view, refresh, open, watcher,
+		watcher.onDidCreate(() => tree.scheduleRefresh()),
+		watcher.onDidChange(() => tree.scheduleRefresh()),
+		watcher.onDidDelete(() => tree.scheduleRefresh()),
+		vscode.workspace.onDidChangeWorkspaceFolders(() => tree.scheduleRefresh()),
+		vscode.workspace.onDidChangeTextDocument(event => {
+			if (supportedLanguages.includes(event.document.languageId)) {
+				tree.scheduleRefresh();
+			}
+		}),
+		vscode.workspace.onDidCloseTextDocument(document => {
+			if (supportedLanguages.includes(document.languageId)) {
+				tree.scheduleRefresh();
+			}
+		}),
+	);
+	void tree.refresh();
+	return { tree };
 }
 
 export function deactivate() {}

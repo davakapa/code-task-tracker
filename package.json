@@ -20,8 +20,31 @@
       {
         "command": "code-task-tracker.scanCurrentFile",
         "title": "CodeTask Tracker: Найти задачи в текущем файле"
+      },
+      {
+        "command": "code-task-tracker.refresh",
+        "title": "CodeTask Tracker: Обновить задачи проекта",
+        "icon": "$(refresh)"
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "codeTaskTracker.tasks",
+          "name": "CodeTask Tracker",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "code-task-tracker.refresh",
+          "when": "view == codeTaskTracker.tasks",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
