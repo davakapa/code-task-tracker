@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { defaultFilters, describeFilters, hasFilters, matchesFilters, TaskFilters } from './taskFilters';
 import { CommentTask, parseTasks, supportedLanguages, TaskType } from './taskParser';
 
 export const sourcePattern = '**/*.{c,h,cc,cpp,cxx,hpp,hh,hxx,C,H}';
@@ -34,6 +35,10 @@ export class TaskTree implements vscode.TreeDataProvider<TaskTreeNode>, vscode.D
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	private files: FileNode[] = [];
+	private visibleFiles: FileNode[] = [];
+	private filters = defaultFilters();
+	private scanStatus: string | undefined;
+	private scanWarnings = '';
 	private generation = 0;
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private disposed = false;
@@ -47,9 +52,9 @@ export class TaskTree implements vscode.TreeDataProvider<TaskTreeNode>, vscode.D
 
 	getChildren(element?: TaskTreeNode): TaskTreeNode[] {
 		if (!element) {
-			return this.files;
+			return this.visibleFiles;
 		}
-		return element.kind === 'file' ? element.tasks : [];
+		return element.kind === 'file' ? (this.visibleFiles.find(file => file.uri.toString() === element.uri.toString())?.tasks ?? []) : [];
 	}
 
 	getTreeItem(element: TaskTreeNode): vscode.TreeItem {
@@ -96,8 +101,8 @@ export class TaskTree implements vscode.TreeDataProvider<TaskTreeNode>, vscode.D
 		const isCurrent = () => !this.disposed && generation === this.generation;
 		if (!vscode.workspace.workspaceFolders?.length) {
 			this.files = [];
+			this.scanWarnings = '';
 			this.setMessage('Открой папку проекта, чтобы найти задачи C/C++.');
-			this.changed.fire();
 			return;
 		}
 		this.setMessage('Поиск задач…');
@@ -137,22 +142,20 @@ export class TaskTree implements vscode.TreeDataProvider<TaskTreeNode>, vscode.D
 				return;
 			}
 			this.files = files;
-			const count = files.reduce((sum, file) => sum + file.tasks.length, 0);
-			let message = count ? `Задач: ${count} · файлов с задачами: ${files.length}` : 'Задачи C/C++ не найдены.';
+			this.scanWarnings = '';
 			if (skipped) {
-				message += ` Пропущено файлов: ${skipped} (размер, язык или ошибка чтения).`;
+				this.scanWarnings += ` Пропущено файлов: ${skipped} (размер, язык или ошибка чтения).`;
 			}
 			if (limited) {
-				message += ` Показаны результаты только первых ${maxFiles} файлов.`;
+				this.scanWarnings += ` Показаны результаты только первых ${maxFiles} файлов.`;
 			}
-			this.setMessage(message);
-			this.changed.fire();
+			this.setMessage(undefined);
 		} catch (error) {
 			if (isCurrent()) {
 				this.files = [];
+				this.scanWarnings = '';
 				this.setMessage('Не удалось выполнить поиск. Нажми «Обновить задачи».');
 				this.output.appendLine(`Ошибка поиска: ${String(error)}`);
-				this.changed.fire();
 			}
 		}
 	}
@@ -179,10 +182,50 @@ export class TaskTree implements vscode.TreeDataProvider<TaskTreeNode>, vscode.D
 		}
 	}
 
-	private setMessage(message: string) {
+	getFilters(): TaskFilters {
+		return { ...this.filters, types: [...this.filters.types], priorities: [...this.filters.priorities] };
+	}
+
+	setFilters(update: Partial<TaskFilters>) {
+		const filters = { ...this.filters, ...update };
+		this.filters = {
+			types: [...filters.types], priorities: [...filters.priorities],
+			fileQuery: filters.fileQuery.trim(), textQuery: filters.textQuery.trim(),
+		};
+		this.updateView();
+	}
+
+	resetFilters() {
+		this.filters = defaultFilters();
+		this.updateView();
+	}
+
+	private setMessage(message: string | undefined) {
+		this.scanStatus = message;
+		this.updateView();
+	}
+
+	private updateView() {
+		// Исходный список остаётся целым: сброс фильтра не требует нового поиска.
+		this.visibleFiles = this.files.map(file => ({
+			...file,
+			tasks: file.tasks.filter(node => matchesFilters(node.task, vscode.workspace.asRelativePath(file.uri, true), this.filters)),
+		})).filter(file => file.tasks.length > 0);
+		const total = this.files.reduce((sum, file) => sum + file.tasks.length, 0);
+		const visible = this.visibleFiles.reduce((sum, file) => sum + file.tasks.length, 0);
+		let message = hasFilters(this.filters)
+			? (visible ? `Показано задач: ${visible} из ${total}` : `По фильтрам ничего не найдено (всего задач: ${total}). Сбрось или измени фильтры.`)
+			: (total ? `Задач: ${total} · файлов с задачами: ${this.files.length}` : 'Задачи C/C++ не найдены.');
+		message = (this.scanStatus ?? message) + this.scanWarnings;
+		const description = describeFilters(this.filters);
+		if (description) {
+			message += `\n${description}`;
+		}
 		if (this.view) {
 			this.view.message = message;
+			this.view.description = hasFilters(this.filters) ? `${visible}/${total}` : `${total}`;
 		}
+		this.changed.fire();
 	}
 
 	dispose() {

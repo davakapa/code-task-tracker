@@ -25,6 +25,21 @@
         "command": "code-task-tracker.refresh",
         "title": "CodeTask Tracker: Обновить задачи проекта",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "code-task-tracker.filter",
+        "title": "CodeTask Tracker: Настроить фильтры",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "code-task-tracker.search",
+        "title": "CodeTask Tracker: Поиск по тексту задачи",
+        "icon": "$(search)"
+      },
+      {
+        "command": "code-task-tracker.resetFilters",
+        "title": "CodeTask Tracker: Сбросить фильтры",
+        "icon": "$(clear-all)"
       }
     ],
     "views": {
@@ -42,6 +57,21 @@
           "command": "code-task-tracker.refresh",
           "when": "view == codeTaskTracker.tasks",
           "group": "navigation"
+        },
+        {
+          "command": "code-task-tracker.filter",
+          "when": "view == codeTaskTracker.tasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "code-task-tracker.search",
+          "when": "view == codeTaskTracker.tasks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "code-task-tracker.resetFilters",
+          "when": "view == codeTaskTracker.tasks",
+          "group": "navigation@3"
         }
       ]
     }
@@ -59,7 +89,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test",
-    "test:unit": "npm run compile-tests && node --test out/test/taskParser.unit.js"
+    "test:unit": "npm run compile-tests && node --test out/test/*.unit.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.144.0",

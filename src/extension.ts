@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { chooseFilters, searchTasks } from './filterCommands';
 import { parseTasks, supportedLanguages } from './taskParser';
 import { sourcePattern, TaskNode, TaskTree } from './taskTree';
 
@@ -38,9 +39,12 @@ export function activate(context: vscode.ExtensionContext) {
 	tree.attachView(view);
 	const refresh = vscode.commands.registerCommand('code-task-tracker.refresh', () => tree.refresh());
 	const open = vscode.commands.registerCommand('code-task-tracker.openTask', (node: TaskNode) => tree.openTask(node));
+	const filter = vscode.commands.registerCommand('code-task-tracker.filter', () => chooseFilters(tree));
+	const search = vscode.commands.registerCommand('code-task-tracker.search', () => searchTasks(tree));
+	const reset = vscode.commands.registerCommand('code-task-tracker.resetFilters', () => tree.resetFilters());
 	const watcher = vscode.workspace.createFileSystemWatcher(sourcePattern);
 	context.subscriptions.push(
-		output, hello, scan, tree, view, refresh, open, watcher,
+		output, hello, scan, tree, view, refresh, open, filter, search, reset, watcher,
 		watcher.onDidCreate(() => tree.scheduleRefresh()),
 		watcher.onDidChange(() => tree.scheduleRefresh()),
 		watcher.onDidDelete(() => tree.scheduleRefresh()),
